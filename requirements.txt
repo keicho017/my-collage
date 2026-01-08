@@ -1,0 +1,6 @@
+streamlit
+rembg
+duckduckgo_search
+Pillow
+requests
+onnxruntime
