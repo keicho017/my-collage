@@ -7,16 +7,15 @@ from duckduckgo_search import DDGS
 import random
 import time
 
-# --- 1. 페이지 설정 및 스타일 ---
+# --- 1. 페이지 설정 ---
 st.set_page_config(page_title="My Favorite Collage", layout="wide")
 
-# 세션 상태(데이터 저장소) 초기화
 if 'collage_items' not in st.session_state:
     st.session_state.collage_items = []
 if 'user_name' not in st.session_state:
     st.session_state.user_name = ""
 
-# --- 2. 입장 화면 (이름 입력) ---
+# --- 2. 입장 화면 ---
 if not st.session_state.user_name:
     st.markdown("<h1 style='text-align: center;'>🎨 나만의 취향 콜라주 메이커</h1>", unsafe_allow_html=True)
     user_input = st.text_input("당신의 이름을 입력하고 시작하세요!", placeholder="예: 제미니")
@@ -26,21 +25,17 @@ if not st.session_state.user_name:
             st.rerun()
     st.stop()
 
-# --- 3. 메인 화면 헤더 ---
+# --- 3. 메인 화면 ---
 st.markdown(f"<h1 style='text-align: center; color: #FF69B4;'>💖 {st.session_state.user_name}님의 최애 콜라주 💖</h1>", unsafe_allow_html=True)
 
-# 왼쪽 조작창 / 오른쪽 미리보기창 분할
 col_left, col_right = st.columns([1, 1.2])
 
-# --- 4. 왼쪽: 사진 추가 및 관리 ---
 with col_left:
     st.subheader("🛠️ 아이템 추가")
-    
     tab1, tab2, tab3 = st.tabs(["📁 직접 업로드", "🔍 이미지 검색", "✨ 스티커"])
     
-    # [탭 1] 직접 업로드 (가장 확실한 방법)
     with tab1:
-        uploaded_files = st.file_uploader("사진을 선택하세요 (여러 장 가능)", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
+        uploaded_files = st.file_uploader("사진을 선택하세요", accept_multiple_files=True, type=['jpg', 'jpeg', 'png'])
         if st.button("업로드 및 배경 제거"):
             if uploaded_files:
                 for f in uploaded_files:
@@ -49,17 +44,78 @@ with col_left:
                         nobg = remove(img)
                         st.session_state.collage_items.append({"img": nobg, "name": f.name})
                 st.rerun()
-            else:
-                st.warning("파일을 먼저 선택해주세요!")
 
-    # [탭 2] 이미지 검색 (강화된 버전)
     with tab2:
-        search_query = st.text_input("검색어 입력 (예: 짱구, 아이유)", placeholder="검색어를 입력하세요")
+        search_query = st.text_input("검색어 입력", placeholder="예: 짱구, 아이유")
         if st.button("검색어로 추가"):
             if search_query:
                 with st.spinner('이미지를 찾는 중...'):
                     try:
                         with DDGS() as ddgs:
-                            # 차단 방지를 위해 검색 전 대기 및 여러 개 검색 시도
                             time.sleep(1.5)
-                            search_results = list
+                            search_results = list(ddgs.images(search_query, max_results=3))
+                            
+                            if search_results:
+                                success = False
+                                for result in search_results:
+                                    try:
+                                        res = requests.get(result['image'], timeout=5)
+                                        if res.status_code == 200:
+                                            img = Image.open(BytesIO(res.content))
+                                            nobg = remove(img)
+                                            st.session_state.collage_items.append({"img": nobg, "name": search_query})
+                                            success = True
+                                            break
+                                    except:
+                                        continue
+                                if not success:
+                                    st.error("이미지를 가져오지 못했습니다.")
+                            else:
+                                st.info("검색 결과가 없습니다.")
+                    except Exception as e:
+                        st.error("검색 서비스 연결이 어렵습니다. 직접 업로드해 주세요!")
+                st.rerun()
+
+    with tab3:
+        stickers = ["❤️", "⭐", "🍀", "🎀", "🔥", "✨", "👑", "🍭"]
+        chosen = st.selectbox("스티커 선택", stickers)
+        if st.button("스티커 추가"):
+            s_img = Image.new("RGBA", (200, 200), (0,0,0,0))
+            draw = ImageDraw.Draw(s_img)
+            draw.text((50, 50), chosen, fill="red", font_size=100)
+            st.session_state.collage_items.append({"img": s_img, "name": f"스티커 {chosen}"})
+            st.rerun()
+
+    if st.session_state.collage_items:
+        st.divider()
+        st.subheader("층층이 관리 (레이어)")
+        for i, item in enumerate(st.session_state.collage_items):
+            m_c1, m_c2, m_c3, m_c4 = st.columns([1, 4, 1, 1])
+            m_c1.image(item['img'], width=40)
+            m_c2.write(f"{i+1}층: {item['name']}")
+            if m_c3.button("🔼", key=f"up{i}") and i > 0:
+                st.session_state.collage_items[i], st.session_state.collage_items[i-1] = st.session_state.collage_items[i-1], st.session_state.collage_items[i]
+                st.rerun()
+            if m_c4.button("🗑️", key=f"del{i}"):
+                st.session_state.collage_items.pop(i)
+                st.rerun()
+
+with col_right:
+    st.subheader("🖼️ 콜라주 결과물")
+    if st.session_state.collage_items:
+        canvas = Image.new("RGBA", (1000, 700), (255, 255, 255, 255))
+        for item in st.session_state.collage_items:
+            img = item['img']
+            base_width = 350
+            w_percent = (base_width / float(img.size[0]))
+            h_size = int((float(img.size[1]) * float(w_percent)))
+            resized_img = img.resize((base_width, h_size), Image.Resampling.LANCZOS)
+            x, y = random.randint(0, 1000 - base_width), random.randint(0, max(0, 700 - h_size))
+            canvas.paste(resized_img, (x, y), resized_img)
+        st.image(canvas, use_container_width=True)
+        
+        output = BytesIO()
+        canvas.save(output, format="PNG")
+        st.download_button("💾 사진 저장", output.getvalue(), "collage.png", "image/png", use_container_width=True)
+    else:
+        st.info("왼쪽에서 사진을 추가해보세요!")
