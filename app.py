@@ -43,6 +43,7 @@ with col_left:
                         img = Image.open(f)
                         nobg = remove(img)
                         st.session_state.collage_items.append({"img": nobg, "name": f.name})
+                st.toast(f"{len(uploaded_files)}개의 이미지를 추가했습니다! ✨")
                 st.rerun()
 
     with tab2:
@@ -52,10 +53,12 @@ with col_left:
                 with st.spinner('이미지를 찾는 중...'):
                     try:
                         with DDGS() as ddgs:
-                            time.sleep(1.5)
-                            search_results = list(ddgs.images(search_query, max_results=3))
+                            time.sleep(1.5) # 차단 방지 대기
+                            search_results = list(ddgs.images(search_query, max_results=5))
                             
-                            if search_results:
+                            if not search_results:
+                                st.toast("🔍 검색 결과가 없습니다. 다른 단어로 검색해보세요.", icon="⚠️")
+                            else:
                                 success = False
                                 for result in search_results:
                                     try:
@@ -65,15 +68,15 @@ with col_left:
                                             nobg = remove(img)
                                             st.session_state.collage_items.append({"img": nobg, "name": search_query})
                                             success = True
+                                            st.toast(f"'{search_query}' 이미지를 찾아서 추가했습니다! 🎉")
                                             break
                                     except:
                                         continue
+                                
                                 if not success:
-                                    st.error("이미지를 가져오지 못했습니다.")
-                            else:
-                                st.info("검색 결과가 없습니다.")
+                                    st.toast("🚫 이미지 사이트에서 접근을 거부했습니다. 다른 검색어로 시도해보세요.", icon="❌")
                     except Exception as e:
-                        st.error("검색 서비스 연결이 어렵습니다. 직접 업로드해 주세요!")
+                        st.toast("⏳ 검색 서버가 바쁩니다. 잠시 후 다시 시도하거나 사진을 직접 업로드해주세요.", icon="⚠️")
                 st.rerun()
 
     with tab3:
@@ -84,8 +87,10 @@ with col_left:
             draw = ImageDraw.Draw(s_img)
             draw.text((50, 50), chosen, fill="red", font_size=100)
             st.session_state.collage_items.append({"img": s_img, "name": f"스티커 {chosen}"})
+            st.toast(f"스티커 {chosen} 추가 완료! 💖")
             st.rerun()
 
+    # 레이어 관리
     if st.session_state.collage_items:
         st.divider()
         st.subheader("층층이 관리 (레이어)")
